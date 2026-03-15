@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:busqueda_capitulos_simpson/models/episode.dart';
+import 'package:busqueda_capitulos_simpson/services/simpsons_service.dart';
 
 void main() {
   runApp(const SimpsonsUiApp());
@@ -31,24 +33,38 @@ class SimpsonsSearchScreen extends StatefulWidget {
 
 class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
   
+  final TextEditingController _idController = TextEditingController();
+  final SimpsonsService _simpsonsService = SimpsonsService();
+  
   bool _isSearching = false;
   bool _hasResult = false;
+  Episode? _episode;
 
   
-  void _simulateSearch() {
+  Future<void> _searchEpisode() async {
     FocusScope.of(context).unfocus(); 
     
+    final String input = _idController.text.trim();
+    if (input.isEmpty) return;
+
     setState(() {
       _isSearching = true;
       _hasResult = false;
+      _episode = null;
     });
 
+    final int? id = int.tryParse(input);
     
-    Future.delayed(const Duration(seconds: 2), () {
+    if (id != null) {
+      final result = await _simpsonsService.getEpisodeById(id);
       setState(() {
-        _isSearching = false;
-        _hasResult = true; 
+        _episode = result;
+        _hasResult = true; // Se completó la búsqueda (con o sin éxito)
       });
+    }
+
+    setState(() {
+      _isSearching = false;
     });
   }
 
@@ -68,11 +84,12 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
         elevation: 0,
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             
             Container(
               decoration: BoxDecoration(
@@ -88,6 +105,7 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
                 ],
               ),
               child: TextField(
+                controller: _idController,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
@@ -97,7 +115,7 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.search, color: Colors.black, size: 30),
-                    onPressed: _simulateSearch,
+                    onPressed: _searchEpisode,
                   ),
                 ),
               ),
@@ -112,7 +130,7 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
                   strokeWidth: 5,
                 ),
               )
-            else if (_hasResult)
+            else if (_hasResult && _episode != null)
               
               Container(
                 decoration: BoxDecoration(
@@ -132,7 +150,16 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
                   child: Column(
                     children: [
                       const Text(
-                        '"Homero el Grande"', 
+                        'RESULTADO:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1.2
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        '"${_episode!.name}"', 
                         style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.w900,
@@ -155,17 +182,85 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
                           borderRadius: BorderRadius.circular(9),
                           
                           child: Image.network(
-                            'https://upload.wikimedia.org/wikipedia/en/thumb/0/0d/Simpsons_FamilyPicture.png/220px-Simpsons_FamilyPicture.png',
-                            height: 200,
+                            _episode!.imageUrl,
                             width: double.infinity,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.fitWidth,
+                            errorBuilder: (context, error, stackTrace) => 
+                              const Center(child: Padding(padding: EdgeInsets.all(20), child: Icon(Icons.broken_image, size: 50))),
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      // Detalles adicionales
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildInfoBadge('Temp: ${_episode!.season}'),
+                          const SizedBox(width: 15),
+                          _buildInfoBadge('Cap: ${_episode!.episodeNumber}'),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 15),
+                      
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              _episode!.synopsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                height: 1.4,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.justify,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Emitido: ${_episode!.airDate}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[700],
+                                fontStyle: FontStyle.italic
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
               )
+            else if (_hasResult && _episode == null)
+               // Mensaje de error si no se encuentra
+               Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.red[100],
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.red, width: 3),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.error_outline, size: 50, color: Colors.red),
+                      SizedBox(height: 10),
+                      Text(
+                        '¡D\'oh!\nNo encontramos ese capítulo.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red),
+                      ),
+                    ],
+                  ),
+               )
             else
               
               const Center(
@@ -179,8 +274,27 @@ class _SimpsonsSearchScreenState extends State<SimpsonsSearchScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFD90F),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black, width: 2),
+        boxShadow: const [
+          BoxShadow(color: Colors.black, offset: Offset(2, 2)),
+        ],
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
       ),
     );
   }
